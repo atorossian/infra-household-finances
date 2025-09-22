@@ -1,4 +1,13 @@
-# S3 Bucket
+############################################
+# Data sources
+############################################
+
+data "aws_caller_identity" "current" {}
+
+############################################
+# S3 bucket (per env)
+############################################
+
 resource "aws_s3_bucket" "data" {
   bucket = "${var.app_name}-${var.env}"
 }
@@ -19,22 +28,36 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   }
 }
 
-# ECR Repository
+############################################
+# ECR repository (shared name, per account)
+############################################
+
 resource "aws_ecr_repository" "api" {
   name = var.app_name
 }
 
-# ECS Cluster
+############################################
+# ECS cluster
+############################################
+
 resource "aws_ecs_cluster" "api" {
   name = "${var.app_name}-${var.env}-cluster"
 }
 
+############################################
 # CloudWatch log group
+############################################
+
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.app_name}-${var.env}"
   retention_in_days = 30
 }
 
+############################################
+# IAM roles
+############################################
+
+# Execution role (used by ECS agent)
 resource "aws_iam_role" "ecs_execution" {
   name = "${var.app_name}-${var.env}-ecsTaskExecutionRole"
 
@@ -55,6 +78,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Task role (used by your app container)
 resource "aws_iam_role" "ecs_task" {
   name = "${var.app_name}-${var.env}-task-role"
 
@@ -70,7 +94,7 @@ resource "aws_iam_role" "ecs_task" {
   })
 }
 
-# Inline policy for S3 bucket access
+# Inline policy for S3 access
 resource "aws_iam_role_policy" "ecs_task_s3" {
   name = "${var.app_name}-${var.env}-s3-access"
   role = aws_iam_role.ecs_task.id
@@ -92,7 +116,12 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
-resource "aws_iam_role" "github_actions" {
+############################################
+# GitHub OIDC roles
+############################################
+
+# App repo OIDC role (for deployments)
+resource "aws_iam_role" "github_actions_app" {
   name = "${var.app_name}-${var.env}-github-actions-ecs"
 
   assume_role_policy = jsonencode({
@@ -108,16 +137,17 @@ resource "aws_iam_role" "github_actions" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:atorossian/infra-household-finances:environment:${var.env}"
+          # 👇 Replace with your real GitHub org/user + repo name
+          "token.actions.githubusercontent.com:sub" = "repo:atorossian/household-finances:environment:${var.env}"
         }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "github_actions_policy" {
-  name = "${var.app_name}-${var.env}-github-actions-policy"
-  role = aws_iam_role.github_actions.id
+resource "aws_iam_role_policy" "github_actions_app_policy" {
+  name = "${var.app_name}-${var.env}-github-actions-ecs-policy"
+  role = aws_iam_role.github_actions_app.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -137,13 +167,7 @@ resource "aws_iam_role_policy" "github_actions_policy" {
   })
 }
 
-data "aws_caller_identity" "current" {}
-
-resource "aws_secretsmanager_secret" "app" {
-  name        = "${var.app_name}/${var.env}/app"
-  description = "App secrets for ${var.env} environment of ${var.app_name}"
-}
-
+# Infra repo OIDC role (for Terraform applies)
 resource "aws_iam_role" "github_actions_infra" {
   name = "${var.app_name}-${var.env}-github-actions-infra"
 
@@ -160,7 +184,7 @@ resource "aws_iam_role" "github_actions_infra" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         }
         StringLike = {
-          # 👇 this must match your infra repo name + environment
+          # 👇 Replace with your real GitHub org/user + repo name
           "token.actions.githubusercontent.com:sub" = "repo:atorossian/infra-household-finances:environment:${var.env}"
         }
       }
@@ -189,4 +213,13 @@ resource "aws_iam_role_policy" "github_actions_infra_policy" {
       }
     ]
   })
+}
+
+############################################
+# Secrets Manager container
+############################################
+
+resource "aws_secretsmanager_secret" "app" {
+  name        = "${var.app_name}/${var.env}/app"
+  description = "App secrets container for ${var.env} environment"
 }
