@@ -1,3 +1,13 @@
+terraform {
+  backend "s3" {
+    bucket         = "infra-household-finances-tfstate"
+    key            = "envs/${var.env}/terraform.tfstate"
+    region         = "eu-west-1"
+    dynamodb_table = "infra-household-finances-locks"
+    encrypt        = true
+  }
+}
+
 ############################################
 # Data sources
 ############################################
