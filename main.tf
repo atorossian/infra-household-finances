@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
     bucket         = "infra-household-finances-tfstate"
-    key            = "terraform.tfstate" # same key for all, workspaces will prefix it
+    key            = "terraform.tfstate"
     region         = "eu-west-1"
     dynamodb_table = "infra-household-finances-locks"
     encrypt        = true
@@ -13,19 +13,13 @@ terraform {
 ############################################
 
 data "aws_caller_identity" "current" {}
-data "terraform_workspace" "current" {}
-
-# Map workspace -> env
-locals {
-  env = terraform.workspace
-}
 
 ############################################
 # S3 bucket (per env)
 ############################################
 
 resource "aws_s3_bucket" "data" {
-  bucket = "${var.app_name}-${local.env}"
+  bucket = "${var.app_name}-${var.env}"
 }
 
 resource "aws_s3_bucket_versioning" "this" {
@@ -45,7 +39,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
 }
 
 ############################################
-# ECR repository (per account, shared name)
+# ECR repository (shared name, per account)
 ############################################
 
 resource "aws_ecr_repository" "api" {
@@ -57,7 +51,7 @@ resource "aws_ecr_repository" "api" {
 ############################################
 
 resource "aws_ecs_cluster" "api" {
-  name = "${var.app_name}-${local.env}-cluster"
+  name = "${var.app_name}-${var.env}-cluster"
 }
 
 ############################################
@@ -65,7 +59,7 @@ resource "aws_ecs_cluster" "api" {
 ############################################
 
 resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/${var.app_name}-${local.env}"
+  name              = "/ecs/${var.app_name}-${var.env}"
   retention_in_days = 30
 }
 
@@ -73,9 +67,9 @@ resource "aws_cloudwatch_log_group" "ecs" {
 # IAM roles
 ############################################
 
-# Execution role
+# Execution role (used by ECS agent)
 resource "aws_iam_role" "ecs_execution" {
-  name = "${var.app_name}-${local.env}-ecsTaskExecutionRole"
+  name = "${var.app_name}-${var.env}-ecsTaskExecutionRole"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -94,9 +88,9 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Task role
+# Task role (used by your app container)
 resource "aws_iam_role" "ecs_task" {
-  name = "${var.app_name}-${local.env}-task-role"
+  name = "${var.app_name}-${var.env}-task-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -112,7 +106,7 @@ resource "aws_iam_role" "ecs_task" {
 
 # Inline policy for S3 access
 resource "aws_iam_role_policy" "ecs_task_s3" {
-  name = "${var.app_name}-${local.env}-s3-access"
+  name = "${var.app_name}-${var.env}-s3-access"
   role = aws_iam_role.ecs_task.id
 
   policy = jsonencode({
@@ -132,10 +126,6 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
-############################################
-# OIDC provider (once per account)
-############################################
-
 resource "aws_iam_openid_connect_provider" "github" {
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
@@ -150,9 +140,9 @@ resource "aws_iam_openid_connect_provider" "github" {
 # GitHub OIDC roles
 ############################################
 
-# App repo role
+# App repo OIDC role
 resource "aws_iam_role" "github_actions_app" {
-  name = "${var.app_name}-${local.env}-github-actions-ecs"
+  name = "${var.app_name}-${var.env}-github-actions-ecs"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -167,16 +157,16 @@ resource "aws_iam_role" "github_actions_app" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         },
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_app_repo}:environment:${local.env}"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_app_repo}:environment:${var.env}"
         }
       }
     }]
   })
 }
 
-# Infra repo role
+# Infra repo OIDC role
 resource "aws_iam_role" "github_actions_infra" {
-  name = "${var.app_name}-${local.env}-github-actions-infra"
+  name = "${var.app_name}-${var.env}-github-actions-infra"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -191,7 +181,7 @@ resource "aws_iam_role" "github_actions_infra" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
         },
         StringLike = {
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_infra_repo}:environment:${local.env}"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_infra_repo}:environment:${var.env}"
         }
       }
     }]
@@ -199,10 +189,10 @@ resource "aws_iam_role" "github_actions_infra" {
 }
 
 ############################################
-# Secrets Manager
+# Secrets Manager container
 ############################################
 
 resource "aws_secretsmanager_secret" "app" {
-  name        = "${var.app_name}/${local.env}/app"
-  description = "App secrets container for ${local.env} environment"
+  name        = "${var.app_name}/${var.env}/app"
+  description = "App secrets container for ${var.env} environment"
 }
