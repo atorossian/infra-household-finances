@@ -36,7 +36,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        run: terraform init -reconfigure
+        run: terraform init -reconfigure -input=false
 
       - name: Select or Create Workspace
         run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
@@ -45,7 +45,8 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -var-file=envs/${{ env.ENV }}.tfvars
+        run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var-file=envs/${{ env.ENV }}.tfvars
+        run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
+
