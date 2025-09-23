@@ -21,13 +21,14 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Configure AWS creds (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: eu-west-1
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          audience: sts.amazonaws.com
 
-      - name: Set up Terraform
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
@@ -41,5 +42,5 @@ jobs:
       - name: Terraform Apply
         run: terraform apply -auto-approve -var-file=envs/${{ github.event.inputs.env }}.tfvars
 
-      - name: Save outputs for debugging
+      - name: Show outputs
         run: terraform output

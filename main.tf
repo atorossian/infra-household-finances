@@ -116,104 +116,65 @@ resource "aws_iam_role_policy" "ecs_task_s3" {
   })
 }
 
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  # GitHub’s current root CA thumbprint:
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+}
+
 ############################################
 # GitHub OIDC roles
 ############################################
 
-# App repo OIDC role (for deployments)
+# App repo OIDC role
 resource "aws_iam_role" "github_actions_app" {
   name = "${var.app_name}-${var.env}-github-actions-ecs"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow"
+      Effect = "Allow",
       Principal = {
         Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
-      }
-      Action = "sts:AssumeRoleWithWebIdentity"
+      },
+      Action = "sts:AssumeRoleWithWebIdentity",
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
+        },
         StringLike = {
-          # 👇 Replace with your real GitHub org/user + repo name
-          "token.actions.githubusercontent.com:sub" = "repo:atorossian/household-finances:environment:${var.env}"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_app_repo}:environment:${var.env}"
         }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "github_actions_app_policy" {
-  name = "${var.app_name}-${var.env}-github-actions-ecs-policy"
-  role = aws_iam_role.github_actions_app.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:*",
-          "ecs:Describe*",
-          "ecs:RegisterTaskDefinition",
-          "ecs:UpdateService",
-          "iam:PassRole"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-# Infra repo OIDC role (for Terraform applies)
+# Infra repo OIDC role
 resource "aws_iam_role" "github_actions_infra" {
   name = "${var.app_name}-${var.env}-github-actions-infra"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow"
+      Effect = "Allow",
       Principal = {
         Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
-      }
-      Action = "sts:AssumeRoleWithWebIdentity"
+      },
+      Action = "sts:AssumeRoleWithWebIdentity",
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-        }
+        },
         StringLike = {
-          # 👇 Replace with your real GitHub org/user + repo name
-          "token.actions.githubusercontent.com:sub" = "repo:atorossian/infra-household-finances:environment:${var.env}"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_owner}/${var.github_infra_repo}:environment:${var.env}"
         }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "github_actions_infra_policy" {
-  name = "${var.app_name}-${var.env}-github-actions-infra-policy"
-  role = aws_iam_role.github_actions_infra.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:*",
-          "ecr:*",
-          "ecs:*",
-          "iam:*",
-          "logs:*",
-          "secretsmanager:*"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
 
 ############################################
 # Secrets Manager container
