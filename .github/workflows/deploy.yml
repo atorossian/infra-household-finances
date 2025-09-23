@@ -41,9 +41,8 @@ jobs:
       - name: Select or Create Workspace
         run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
 
-      # ✅ Sync state with AWS (no var-file, no input flags)
       - name: Terraform Refresh
-        run: terraform apply -refresh-only -auto-approve
+        run: terraform apply -refresh-only -auto-approve -var-file=envs/${{ env.ENV }}.tfvars
 
       - name: Terraform Validate
         run: terraform validate
