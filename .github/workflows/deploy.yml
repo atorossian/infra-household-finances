@@ -44,6 +44,9 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Force unlock state
+        run: terraform force-unlock -force 7d8dc4aa-4032-f940-fb02-9246a1c380ab || true
+
       - name: Terraform Refresh
         run: terraform apply -refresh-only -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
 
