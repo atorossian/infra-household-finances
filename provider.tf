@@ -9,6 +9,5 @@ terraform {
 }
 
 provider "aws" {
-  region  = var.aws_region
-  profile = var.aws_profile  # matches your CLI profile (hf-dev, hf-staging, hf-prod)
+  region = var.aws_region
 }
