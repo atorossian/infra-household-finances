@@ -36,7 +36,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        run: terraform init -reconfigure -input=false -lock=false
+        run: terraform init -reconfigure -input=false
 
       - name: Select or Create Workspace
         run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
