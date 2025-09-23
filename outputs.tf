@@ -18,8 +18,12 @@ output "task_role_arn" {
   value = aws_iam_role.ecs_task.arn
 }
 
-output "github_actions_role_arn" {
-  value = aws_iam_role.github_actions.arn
+output "github_actions_app_role_arn" {
+  value = aws_iam_role.github_actions_app.arn
+}
+
+output "github_actions_infra_role_arn" {
+  value = aws_iam_role.github_actions_infra.arn
 }
 
 output "secret_name" {
