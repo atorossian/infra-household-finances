@@ -11,11 +11,11 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
-
+    
     permissions:
       id-token: write
       contents: read
-
+    
     env:
       AWS_REGION: eu-west-1
       ENV: ${{ github.event.inputs.environment }}
@@ -41,12 +41,14 @@ jobs:
       - name: Select or Create Workspace
         run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
 
+      - name: Terraform Refresh
+        run: terraform apply -refresh-only -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
+
       - name: Terraform Validate
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars
+        run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars -out=tfplan
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
-
+        run: terraform apply -auto-approve -input=false tfplan
