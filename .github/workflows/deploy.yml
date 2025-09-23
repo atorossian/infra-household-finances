@@ -1,46 +1,30 @@
-name: Deploy Infra
+name: Deploy Infrastructure
 
 on:
   workflow_dispatch:
     inputs:
-      env:
-        description: "Environment to deploy (dev/staging/prod)"
+      environment:
+        description: "Environment (dev, staging, prod)"
         required: true
-        type: choice
-        options: [dev, staging, prod]
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.env }}
-    permissions:
-      id-token: write
-      contents: read
-
+    environment: ${{ github.event.inputs.environment }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: hashicorp/setup-terraform@v3
         with:
-          aws-region: eu-west-1
+          terraform_version: 1.9.2
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          audience: sts.amazonaws.com
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.5
+          aws-region: eu-west-1
 
       - name: Terraform Init
         run: terraform init
 
-      - name: Terraform Plan
-        run: terraform plan -var-file=envs/${{ github.event.inputs.env }}.tfvars
-
       - name: Terraform Apply
-        run: terraform apply -auto-approve -var-file=envs/${{ github.event.inputs.env }}.tfvars
-
-      - name: Show outputs
-        run: terraform output
+        run: terraform apply -auto-approve -var-file=envs/${{ github.event.inputs.environment }}.tfvars
