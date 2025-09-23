@@ -48,7 +48,7 @@ jobs:
         run: terraform force-unlock -force 7d8dc4aa-4032-f940-fb02-9246a1c380ab || true
 
       - name: Terraform Refresh
-        run: terraform apply -refresh-only -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
+        run: terraform refresh -var-file=envs/${{ env.ENV }}.tfvars
 
       - name: Terraform Plan
         run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars
