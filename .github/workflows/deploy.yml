@@ -13,8 +13,8 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
 
     permissions:
-      id-token: write    # ✅ required for OIDC
-      contents: read     # ✅ required for checkout
+      id-token: write
+      contents: read
 
     env:
       AWS_REGION: eu-west-1
@@ -36,7 +36,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
-        run: terraform init -reconfigure -var-file=envs/${{ env.ENV }}.tfvars
+        run: terraform init -reconfigure
+
+      - name: Select or Create Workspace
+        run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
 
       - name: Terraform Validate
         run: terraform validate
