@@ -11,6 +11,9 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write    # REQUIRED for OIDC
+      contents: read     # usually needed to checkout code
     steps:
       - uses: actions/checkout@v4
 
