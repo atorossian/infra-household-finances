@@ -1,34 +1,47 @@
-name: Terraform Deploy (Staging)
+name: Terraform Deploy to Staging
 
 on:
   push:
-    tags:
-      - 'v*-rc*'   # e.g. v1.0.0-rc1
+    branches: [ main ]
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
-    environment: staging   # requires approval
+    environment: staging
     permissions:
       id-token: write
       contents: read
     env:
       AWS_REGION: eu-west-1
-      ENV: staging
+      TF_WORKSPACE: default
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Terraform Init (S3 backend)
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=infra-household-finances-tfstate" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=eu-west-1" \
+            -backend-config="dynamodb_table=infra-household-finances-locks" \
+            -backend-config="encrypt=true"
 
-      - run: terraform init -reconfigure -input=false
-      - run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
-      - run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan (staging)
+        run: terraform plan -input=false -no-color -lock-timeout=120s -var-file=envs/staging.tfvars
+
+      - name: Terraform Apply (staging)
+        run: terraform apply -auto-approve -input=false -lock-timeout=120s -var-file=envs/staging.tfvars
