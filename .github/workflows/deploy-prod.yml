@@ -1,8 +1,7 @@
 name: Terraform Deploy to Prod
 
 on:
-  push:
-    branches: [ main ]
+  workflow_dispatch: {}
 
 jobs:
   terraform-apply:
@@ -13,7 +12,6 @@ jobs:
       contents: read
     env:
       AWS_REGION: eu-west-1
-      TF_WORKSPACE: default
 
     steps:
       - uses: actions/checkout@v4
