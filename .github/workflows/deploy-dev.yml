@@ -1,0 +1,35 @@
+name: Terraform Deploy to Dev
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform-apply:
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: eu-west-1
+      ENV: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init -reconfigure -input=false
+
+      - run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
+
+      - run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
