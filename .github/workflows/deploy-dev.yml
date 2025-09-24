@@ -3,40 +3,24 @@ name: Terraform Deploy to Dev
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  id-token: write
-  contents: read
-
-concurrency:
-  group: infra-dev
-  cancel-in-progress: false
-
-env:
-  AWS_REGION: eu-west-1
-  ENV: dev
 
 jobs:
   terraform-apply:
     runs-on: ubuntu-latest
     environment: dev
-
     permissions:
       id-token: write
       contents: read
+    env:
+      AWS_REGION: eu-west-1
+      TF_WORKSPACE: default   # force default so backend key matches local state
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # 🔒 Fail early if the role secret isn't visible to this job
-      - name: Assert AWS_OIDC_ROLE_ARN is present
-        run: |
-          if [ -z "${{ secrets.AWS_OIDC_ROLE_ARN }}" ]; then
-            echo "ERROR: Missing secret AWS_OIDC_ROLE_ARN (repo-level or environment: dev)" >&2
-            exit 1
-          fi
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -44,24 +28,21 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # ✅ Sanity check that OIDC worked
-      - name: Who am I?
-        run: aws sts get-caller-identity
+      # Use the exact same backend key you used locally (no workspaces)
+      - name: Terraform Init (S3 backend)
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=infra-household-finances-tfstate" \
+            -backend-config="key=terraform.tfstate" \
+            -backend-config="region=eu-west-1" \
+            -backend-config="dynamodb_table=infra-household-finances-locks" \
+            -backend-config="encrypt=true"
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.5
+      - name: Terraform Validate
+        run: terraform validate
 
-      # Init against your S3+DynamoDB backend declared in main.tf
-      - name: Terraform Init
-        run: terraform init -reconfigure -input=false
+      - name: Terraform Plan (dev)
+        run: terraform plan -input=false -no-color -lock-timeout=120s -var-file=envs/dev.tfvars
 
-      - name: Select/Create workspace
-        run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
-
-      - name: Terraform Plan
-        run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
+      - name: Terraform Apply (dev)
+        run: terraform apply -auto-approve -input=false -lock-timeout=120s -var-file=envs/dev.tfvars
