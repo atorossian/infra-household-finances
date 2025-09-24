@@ -19,6 +19,9 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
+      
+      - name: Who am I?
+        run: aws sts get-caller-identity
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
