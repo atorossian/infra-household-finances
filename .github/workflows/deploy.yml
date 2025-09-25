@@ -1,25 +1,43 @@
-name: Terraform Deploy to Staging
+name: Terraform Deploy (all envs)
 
 on:
-  workflow_dispatch: {}
+  push:
+    branches: [ main ]          # auto-deploy dev on push
+  workflow_dispatch:            # manual run for any env
+    inputs:
+      environment:
+        description: "Which environment to deploy?"
+        type: choice
+        required: false
+        default: dev
+        options: [dev, staging, prod]
 
 jobs:
-  terraform-apply:
+  deploy:
+    # compute env once for the job:
+    strategy:
+      matrix:
+        env: [ ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }} ]
+
     runs-on: ubuntu-latest
-    environment: staging
+    environment: ${{ matrix.env }}
+
     permissions:
       id-token: write
       contents: read
+
     env:
       AWS_REGION: eu-west-1
-      ENV: staging
+      ENV: ${{ matrix.env }}
       TF_BUCKET: infra-household-finances-tfstate
       TF_LOCK_TABLE: infra-household-finances-locks
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
 
@@ -29,7 +47,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Ensure the DynamoDB lock table exists (idempotent)
+      # idempotent: create the lock table if it doesn't exist
       - name: Ensure DynamoDB lock table
         shell: bash
         run: |
@@ -43,8 +61,7 @@ jobs:
             aws dynamodb wait table-exists --table-name "$TF_LOCK_TABLE"
           fi
 
-      # Init directly against the staging key
-      - name: Terraform Init (S3 backend)
+      - name: Terraform Init (S3 backend; no workspaces)
         run: |
           terraform init -reconfigure -input=false \
             -backend-config="bucket=${TF_BUCKET}" \
@@ -52,8 +69,6 @@ jobs:
             -backend-config="region=${AWS_REGION}" \
             -backend-config="dynamodb_table=${TF_LOCK_TABLE}" \
             -backend-config="encrypt=true"
-
-      # No local workspaces when using a fixed S3 key – remove the workspace step
 
       - name: Terraform Plan
         run: terraform plan -input=false -var-file=envs/${{ env.ENV }}.tfvars
