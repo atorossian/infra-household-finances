@@ -1,17 +1,20 @@
-name: Terraform Deploy to Staging
+name: Terraform Deploy (staging)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
-  terraform-apply:
+  apply:
     runs-on: ubuntu-latest
     environment: staging
+
     permissions:
       id-token: write
       contents: read
+
     env:
       AWS_REGION: eu-west-1
+      ENV: staging
 
     steps:
       - uses: actions/checkout@v4
@@ -19,30 +22,30 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
-      
-      - name: Who am I?
-        run: aws sts get-caller-identity
+
+      # Ensure the env-scoped secret exists
+      - name: Verify AWS_OIDC_ROLE_ARN is present
+        run: |
+          if [ -z "${{ secrets.AWS_OIDC_ROLE_ARN }}" ]; then
+            echo "ERROR: Secret AWS_OIDC_ROLE_ARN is not set for environment 'staging'."
+            exit 1
+          fi
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-session-name: gha-terraform-staging
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform Init (S3 backend)
-        run: |
-          terraform init -reconfigure -input=false \
-            -backend-config="bucket=infra-household-finances-tfstate" \
-            -backend-config="key=terraform.tfstate" \
-            -backend-config="region=eu-west-1" \
-            -backend-config="dynamodb_table=infra-household-finances-locks" \
-            -backend-config="encrypt=true"
+      - name: Who am I?
+        run: aws sts get-caller-identity
 
-      - name: Terraform Validate
-        run: terraform validate
+      - name: Terraform Init
+        run: terraform init -reconfigure -input=false
 
-      - name: Terraform Plan (staging)
-        run: terraform plan -input=false -no-color -lock-timeout=120s -var-file=envs/staging.tfvars
+      - name: Select/Create Workspace
+        run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
 
-      - name: Terraform Apply (staging)
-        run: terraform apply -auto-approve -input=false -lock-timeout=120s -var-file=envs/staging.tfvars
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false -var-file=envs/${{ env.ENV }}.tfvars
