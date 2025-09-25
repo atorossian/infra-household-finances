@@ -1,4 +1,4 @@
-name: Terraform Deploy (staging)
+name: Terraform Deploy to Staging
 
 on:
   workflow_dispatch:
@@ -41,8 +41,14 @@ jobs:
       - name: Who am I?
         run: aws sts get-caller-identity
 
-      - name: Terraform Init
-        run: terraform init -reconfigure -input=false
+      - name: Terraform Init (S3 backend, point to staging)
+        run: |
+          terraform init -reconfigure -input=false \
+            -backend-config="bucket=infra-household-finances-tfstate" \
+            -backend-config="key=env:/staging/terraform.tfstate" \
+            -backend-config="region=eu-west-1" \
+            -backend-config="dynamodb_table=infra-household-finances-locks" \
+            -backend-config="encrypt=true"
 
       - name: Select/Create Workspace
         run: terraform workspace select ${{ env.ENV }} || terraform workspace new ${{ env.ENV }}
