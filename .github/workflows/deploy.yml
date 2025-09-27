@@ -2,25 +2,21 @@ name: Terraform Deploy (all envs)
 
 on:
   push:
-    branches: [ main ]          # auto-deploy dev on push
-  workflow_dispatch:            # manual run for any env
+    branches: [ main ]   # auto-deploy dev on push
+  workflow_dispatch:
     inputs:
       environment:
         description: "Which environment to deploy?"
         type: choice
-        required: false
+        required: true
         default: dev
         options: [dev, staging, prod]
 
 jobs:
   deploy:
-    # compute env once for the job:
-    strategy:
-      matrix:
-        env: [ ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }} ]
-
     runs-on: ubuntu-latest
-    environment: ${{ matrix.env }}
+    # Map job environment to the selected env (or dev on push)
+    environment: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}
 
     permissions:
       id-token: write
@@ -28,7 +24,7 @@ jobs:
 
     env:
       AWS_REGION: eu-west-1
-      ENV: ${{ matrix.env }}
+      ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}
       TF_BUCKET: infra-household-finances-tfstate
       TF_LOCK_TABLE: infra-household-finances-locks
 
@@ -47,7 +43,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # idempotent: create the lock table if it doesn't exist
       - name: Ensure DynamoDB lock table
         shell: bash
         run: |
